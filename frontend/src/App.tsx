@@ -6,6 +6,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { useQuery } from '@tanstack/react-query';
 import { useState, useEffect, useRef } from 'react';
 import HomePage from './pages/HomePage';
+import RecentEpisodesPage from './pages/RecentEpisodesPage';
 import JobsPage from './pages/JobsPage';
 import ConfigPage from './pages/ConfigPage';
 import LoginPage from './pages/LoginPage';
@@ -117,6 +118,9 @@ function AppShell() {
               <Link to="/" className="text-sm font-medium text-gray-700 hover:text-gray-900">
                 Home
               </Link>
+              <Link to="/episodes" className="text-sm font-medium text-gray-700 hover:text-gray-900">
+                Episodes
+              </Link>
               {showBillingLink && (
                 <Link to="/billing" className="text-sm font-medium text-gray-700 hover:text-gray-900">
                   Billing
@@ -214,6 +218,12 @@ function AppShell() {
                     >
                       Home
                     </Link>
+                    <Link
+                      to="/episodes"
+                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                    >
+                      Episodes
+                    </Link>
                     {showBillingLink && (
                       <Link
                         to="/billing"
@@ -276,6 +286,7 @@ function AppShell() {
       <main className="flex-1 px-2 sm:px-4 lg:px-6 py-4 overflow-auto">
         <Routes>
           <Route path="/" element={<HomePage />} />
+          <Route path="/episodes" element={<RecentEpisodesPage />} />
           {showBillingLink && <Route path="/billing" element={<BillingPage />} />}
           {showJobsLink && <Route path="/jobs" element={<JobsPage />} />}
           {showConfigLink && <Route path="/config" element={<ConfigPage />} />}

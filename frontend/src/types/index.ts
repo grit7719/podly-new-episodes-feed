@@ -25,7 +25,13 @@ export interface Episode {
   download_url: string;
   image_url: string | null;
   download_count: number;
-} 
+}
+
+export interface RecentEpisode extends Episode {
+  feed_id: number;
+  feed_title: string | null;
+  feed_image_url: string | null;
+}
 
 export interface PagedResult<T> {
   items: T[];

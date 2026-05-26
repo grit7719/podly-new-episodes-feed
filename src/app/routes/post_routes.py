@@ -12,12 +12,14 @@ from app.auth.guards import require_admin
 from app.auth.service import update_user_last_active
 from app.extensions import db
 from app.jobs_manager import get_jobs_manager
+from app.auth import is_auth_enabled
 from app.models import (
     Feed,
     Identification,
     ModelCall,
     Post,
     TranscriptSegment,
+    UserFeed,
 )
 from app.posts import clear_post_processing_data
 from app.routes.post_stats_utils import (
@@ -191,6 +193,114 @@ def api_feed_posts(feed_id: int) -> flask.Response:
             "total": total_posts,
             "total_pages": total_pages,
             "whitelisted_total": whitelisted_total,
+        }
+    )
+
+
+@post_bp.route("/api/episodes/recent", methods=["GET"])
+def api_recent_episodes() -> flask.Response:
+    """Return a paginated list of episodes across all visible feeds, newest first."""
+
+    db.session.expire_all()
+
+    try:
+        page = int(request.args.get("page", 1))
+    except (TypeError, ValueError):
+        page = 1
+    page = max(page, 1)
+
+    try:
+        page_size = int(request.args.get("page_size", 25))
+    except (TypeError, ValueError):
+        page_size = 25
+    page_size = max(1, min(page_size, 200))
+
+    whitelisted_only = str(request.args.get("whitelisted_only", "false")).lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+    # Scope visible feeds the same way /feeds does:
+    # auth disabled => all feeds; non-admin user => their UserFeed memberships (+ Feed 1).
+    visible_feed_ids: Optional[list[int]] = None
+    if is_auth_enabled():
+        current = getattr(g, "current_user", None)
+        if current is None:
+            return flask.make_response(("Authentication required", 401))
+        if current.role != "admin":
+            user_feed_ids = {
+                uf.feed_id
+                for uf in UserFeed.query.filter_by(user_id=current.id).all()
+            }
+            user_feed_ids.add(1)  # Hack: Feed 1 is always visible
+            visible_feed_ids = list(user_feed_ids)
+
+    base_query = Post.query
+    if visible_feed_ids is not None:
+        if not visible_feed_ids:
+            return flask.jsonify(
+                {
+                    "items": [],
+                    "page": page,
+                    "page_size": page_size,
+                    "total": 0,
+                    "total_pages": 0,
+                }
+            )
+        base_query = base_query.filter(Post.feed_id.in_(visible_feed_ids))
+    if whitelisted_only:
+        base_query = base_query.filter_by(whitelisted=True)
+
+    ordered_query = base_query.order_by(
+        Post.release_date.desc().nullslast(), Post.id.desc()
+    )
+
+    total_posts = ordered_query.count()
+    db_posts = ordered_query.offset((page - 1) * page_size).limit(page_size).all()
+
+    # Batch-load feed info to avoid N+1
+    feed_ids_in_page = {post.feed_id for post in db_posts}
+    feeds_by_id = {
+        f.id: f
+        for f in Feed.query.filter(Feed.id.in_(feed_ids_in_page)).all()
+    } if feed_ids_in_page else {}
+
+    items = []
+    for post in db_posts:
+        feed = feeds_by_id.get(post.feed_id)
+        items.append(
+            {
+                "id": post.id,
+                "guid": post.guid,
+                "title": post.title,
+                "description": post.description,
+                "release_date": (
+                    post.release_date.isoformat() if post.release_date else None
+                ),
+                "duration": post.duration,
+                "whitelisted": post.whitelisted,
+                "has_processed_audio": post.processed_audio_path is not None,
+                "has_unprocessed_audio": post.unprocessed_audio_path is not None,
+                "download_url": post.download_url,
+                "image_url": post.image_url,
+                "download_count": post.download_count,
+                "feed_id": post.feed_id,
+                "feed_title": feed.title if feed else None,
+                "feed_image_url": feed.image_url if feed else None,
+            }
+        )
+
+    total_pages = math.ceil(total_posts / page_size) if total_posts else 0
+
+    return flask.jsonify(
+        {
+            "items": items,
+            "page": page,
+            "page_size": page_size,
+            "total": total_posts,
+            "total_pages": total_pages,
         }
     )
 

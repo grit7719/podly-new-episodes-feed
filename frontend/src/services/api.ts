@@ -3,6 +3,7 @@ import { diagnostics } from '../utils/diagnostics';
 import type {
   Feed,
   Episode,
+  RecentEpisode,
   Job,
   JobManagerStatus,
   CleanupPreview,
@@ -435,6 +436,19 @@ export const feedsApi = {
 
   getAggregateFeedLink: async (): Promise<{ url: string }> => {
     const response = await api.post('/api/user/aggregate-link');
+    return response.data;
+  },
+
+  getRecentEpisodes: async (
+    options?: { page?: number; pageSize?: number; whitelistedOnly?: boolean }
+  ): Promise<PagedResult<RecentEpisode>> => {
+    const response = await api.get('/api/episodes/recent', {
+      params: {
+        page: options?.page,
+        page_size: options?.pageSize,
+        whitelisted_only: options?.whitelistedOnly,
+      },
+    });
     return response.data;
   },
 };
